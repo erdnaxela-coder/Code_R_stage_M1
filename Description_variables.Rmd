@@ -1,0 +1,259 @@
+---
+title: 'Stage : Description des variables'
+author: "Catherineau Alexandre"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  word_document: default
+---
+
+Chargement des données
+
+```{r, message=FALSE}
+datatransvers=read.table("datatransvers.txt",header=T)
+```
+
+Chargement des packages nécessaires
+
+```{r}
+summary(datatransvers)
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(Hmisc)
+library(dplyr)
+library(forcats)
+library(viridis)
+```
+
+Recodage des modalités
+
+```{r}
+datatransvers$DEM0 <- datatransvers$DEM0 %>% as.character() %>% fct_recode(
+    "Non dément"="0", "Dément"="1")
+datatransvers$DC <- datatransvers$DC %>% as.character() %>% fct_recode(
+    "Vivant"="0", "Décédé"="1")
+datatransvers$SEXE <- datatransvers$SEXE %>% as.character() %>% fct_recode(
+    "Homme"="0", "Femme"="1")
+datatransvers$DIPNIVt <- datatransvers$DIPNIVt %>% as.character() %>% fct_recode(
+    "Bas"="0", "Haut"="1")
+datatransvers$APOE4 <- datatransvers$APOE4 %>% as.character() %>% fct_recode(
+    "Absence"="0", "Présence"="1")
+```
+
+### **Flow chart**
+
+![](images/Flow_Chart-02.png)
+
+### Graphiques et description des données
+
+**Âge de début et de fin**
+
+```{r}
+describe(datatransvers$AGE0)
+```
+
+```{r}
+describe(datatransvers$AGEFIN)
+```
+
+```{r}
+par(mfrow = c(1, 2))
+
+hist(datatransvers$AGE0, 
+      main = paste("âge au début de l'étude"),
+      ylab = "Effectifs",
+      xlab = "Âge")
+hist(datatransvers$AGEFIN, 
+      main = paste("âge à la fin"),
+      ylab = "Effectifs",
+      xlab = "Âge")
+```
+
+|          | Âge au début de l'étude | Âge en fin d'étude (ou censuré) |
+|:--------:|:-----------------------:|:-------------------------------:|
+| Moyenne  |          73,62          |              84,77              |
+| Variance |          5,868          |              6,279              |
+
+**Âges de démence et de décès**
+
+```{r}
+describe(filter(datatransvers,DEM0=="Dément")$AGEDEM)
+```
+
+```{r}
+describe(filter(datatransvers,DC=="Décédé")$AGEDC)
+```
+
+```{r}
+par(mfrow = c(1, 2))
+
+hist(filter(datatransvers,DEM0=="Dément")$AGEDEM, 
+      main = paste("Age de démence"),
+      ylab = "Effectifs",
+      xlab = "Âge")
+hist(filter(datatransvers,DC=="Décédé")$AGEDC, 
+      main = paste("Age de décès"),
+      ylab = "Effectifs",
+      xlab = "Âge")
+```
+
+|          | Âge de démence | Âge de décès |
+|:--------:|:--------------:|:------------:|
+| Moyenne  |     83,08      |    85,27     |
+| Variance |     6,476      |    7,383     |
+
+**Score 14** (CVI)
+
+```{r}
+describe(datatransvers$score14)
+```
+
+```{r}
+hist(datatransvers$score14, 
+      main = paste(""),
+      ylab = expression(bold("Effectifs")),
+      xlim=c(0,14),
+      col=viridis(12),
+      cex=3,
+      xlab = expression(bold("Score")))
+dev.print(device = png, file = "plot_score14.png", width = 500)
+```
+
+|          | Score CVI (score 14) |
+|:--------:|:--------------------:|
+| Moyenne  |        8,411         |
+| Variance |        2,049         |
+
+**Score 14 en classes**
+
+```{r}
+describe(datatransvers$score14t)
+```
+
+```{r}
+n=length(datatransvers$DIPNIVt)
+barplot(table(datatransvers$score14t)/n*100, 
+        col=c("azure1","azure2","azure3","azure4"),
+        main="Score CVI",
+        legend.text=c("<=6","7-8","9-10",">=11"),
+        ylab="Fréquence (%)")
+```
+
+| Score 14 : classes | Effectifs | Pourcentages |
+|--------------------|:---------:|:------------:|
+| [0 - 6]            |    980    |      15      |
+| [7 ; 8]            |   2345    |      36      |
+| [9 ; 10]           |   2439    |      37      |
+| [11 - 14]          |    822    |      12      |
+
+**Niveau d'étude, Sexe, APOE4**
+
+```{r}
+describe(as.factor(datatransvers$DIPNIVt))
+```
+
+```{r}
+describe(as.factor(datatransvers$SEXE))
+```
+
+```{r}
+describe(as.factor(datatransvers$APOE4))
+```
+
+```{r}
+n=length(datatransvers$DIPNIVt)
+par(mfrow = c(1, 3))
+barplot(table(datatransvers$DIPNIVt)/n*100, 
+        col=c("azure2","azure4"),
+        main="Niveau d'étude", 
+        ylab="Fréquence (%)")
+barplot(table(datatransvers$SEXE)/n*100, 
+        col=c("azure2","azure4"),
+        main="Sexe", 
+        ylab="Fréquence (%)")
+barplot(table(datatransvers$APOE4)/n*100, 
+        col=c("azure2","azure4"),
+        main="Allèle APOE4",
+        ylab="Fréquence (%)")
+```
+
+|                            | Effectifs | Pourcentages |
+|----------------------------|:---------:|:------------:|
+| Niveau d'étude (Bas)       |   3981    |      60      |
+| Présence de l'allèle APOE4 |   1308    |      20      |
+| Sexe (femmes)              |   4153    |      63      |
+
+**Décès et démence**
+
+```{r}
+describe(as.factor(datatransvers$DC))
+```
+
+```{r}
+describe(as.factor(datatransvers$DEM0))
+```
+
+```{r}
+n=length(datatransvers$ID)
+par(mfrow = c(1, 2))
+barplot(table(datatransvers$DEM0)/n*100, 
+        col=c("azure2","azure4"),
+        main="Démence", 
+        ylab="Fréquence (%)")
+barplot(table(datatransvers$DC)/n*100,
+        col=c("azure2","azure4"),
+        main="Statut vital", 
+        ylab="Fréquence (%)")
+```
+
+|                          | Effectifs | Pourcentages |
+|--------------------------|:---------:|:------------:|
+| Décès                    |   2082    |      32      |
+| Diagnostic de la démence |    751    |      11      |
+
+### Délais
+
+```{r}
+describe(filter(datatransvers,DC=="Décédé")$DELAIDC)
+```
+
+```{r}
+par(mfrow = c(1, 2))
+hist(filter(datatransvers,DC=="Décédé")$DELAIDC, 
+      main = paste(""),
+      ylab = "Effectifs",
+      xlab = "Délai (en années)")
+hist(filter(datatransvers,DC=="Vivant")$DELAIDC, 
+      main = paste(""),
+      ylab = "Effectifs",
+      xlab = "Délai (en années)")
+#dev.print(device = png, file = "plot_delaifin.png", width = 500)
+```
+
+```{r}
+describe(filter(datatransvers,DEM0=="Dément")$DELAIDEM)
+```
+
+```{r}
+hist(filter(datatransvers,DEM0=="Dément")$DELAIDEM, 
+      main = paste(""),
+      ylab = "Effectifs",
+      xlab = "Délai (en années)")
+#dev.print(device = png, file = "plot_delaidem.png", width = 500)
+```
+
+```{r}
+describe(datatransvers$CENTRE)
+
+hist(filter(datatransvers,DEM0=="Dément")$DELAIDC, 
+      main = paste(""),
+      ylab = "Effectifs",
+      xlab = "Délai (en années)")
+hist(filter(datatransvers,DEM0=="Dément")$DELAIDEM, 
+      main = paste(""),
+      ylab = "Effectifs",
+      xlab = "Délai (en années)")
+```
