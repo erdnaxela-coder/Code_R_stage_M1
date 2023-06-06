@@ -161,7 +161,7 @@ databox2 <- boxGrob(glue("Echantillon avec les\nvariables d'ajustement",
             .sep = "\n"))
 databox3 <- boxGrob(glue("Base finale",
             "n = {pop}",
-            pop = txtInt(length(data3$ID)),
+            pop = txtInt(length(datatransvers$ID)),
             .sep = "\n"))
 excluded1 <- boxGrob(glue("Scores\ncardiovasculaires\n manquants (n = {tot})",
           tot=txtInt(length(datatrans$ID)-length(data1$ID)),
