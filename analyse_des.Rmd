@@ -1,0 +1,296 @@
+---
+title: "Stage | Analyse descriptive des données et modèle de survie "
+author: "Catherineau Alexandre"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Code R stage
+
+Lecture des données
+
+```{r}
+library(rlang)
+library(dplyr)
+data3C=read.table("base_Alexandre.txt",header=T)
+head(data3C)
+```
+
+On regarde comment sont les variables.
+
+```{r}
+summary(data3C)
+```
+
+On sort le numéro de centre depuis NUM :
+
+```{r}
+data3C$CENTRE[data3C$NUM>=10000]=1
+data3C$CENTRE[data3C$NUM>=20000]=2
+data3C$CENTRE[data3C$NUM>=30000]=3
+```
+
+On discrétise la variable DIPNIV pour plus facilement l'utiliser.
+
+```{r}
+data3C$DIPNIVt[data3C$DIPNIV==1|data3C$DIPNIV==2|data3C$DIPNIV==3]=0
+data3C$DIPNIVt[data3C$DIPNIV==4|data3C$DIPNIV==5]=1
+```
+
+On discrétise la variable Score14.
+
+```{r}
+data3C$score14t=cut(data3C$score14,c(0,6,8,10,14))
+```
+
+## Manipulation des données pour avoir la base transversale
+
+Package pour avoir le résumé des variables
+
+```{r}
+library(skimr)
+data3C$DEM0=as.factor(data3C$DEM0)
+data3C$DIPNIVt=as.factor(data3C$DIPNIVt)
+data3C$DIPNIV=as.factor(data3C$DIPNIV)
+data3C$DC=as.factor(data3C$DC)
+data3C$SEXE=as.factor(data3C$SEXE)
+data3C$avccorr0=as.factor(data3C$avccorr0)
+data3C$malcorot=as.factor(data3C$malcorot)
+data3C$APOE4=as.factor(data3C$APOE4)
+data3C$CENTRE=as.factor(data3C$CENTRE)
+```
+
+La base de données *datatrans* est la base de données transversale au suivi 0.
+
+```{r}
+excluSuivi=filter(data3C,SUIVI==8&abs(AGE0-AGEFIN)<0.0005)
+excluD=filter(data3C,SUIVI==0&DEM0==1)
+datatrans <- data3C %>% filter(SUIVI==0) %>% select(-DC,-DEM0,-SUIVI,-AGEFIN,-AGE,-AGEDEM)
+```
+
+On retire toutes les lignes où la donnée de la variable score14 est manquante. *#flow chart*
+
+```{r}
+data1 <- subset(datatrans, is.na(score14)==F)
+```
+
+Retrait des lignes où les variables d'ajustement sont manquantes. *#flow chart*
+
+```{r}
+data2 <- subset(data1, is.na(DIPNIVt)==F & is.na(APOE4)==F & is.na(avccorr0)==F & is.na(malcorot)==F)
+```
+
+**Création de tables liées aux éléments qui arrivent après le suivi 0** (décès, démence, fin)
+
+-   Âge final
+
+```{r}
+longage = data3C %>% group_by(ID) %>% arrange(desc(AGEFIN)) %>% filter(row_number()==1) %>% select(ID,AGEFIN)
+```
+
+-   Décès
+
+```{r}
+longdc = data3C %>% group_by(ID) %>% arrange(desc(AGEFIN)) %>% filter(row_number()==1) 
+
+#Ici personnes pas décédées âge fin censuré
+longdc0 = longdc %>% group_by(ID) %>% filter(DC==0) %>% select(ID,DC,AGEFIN) %>% mutate(AGEFIN=max(AGEFIN))
+
+#Ici personnes décédées na âge de décès
+longdc1 = longdc %>% group_by(ID) %>% filter(DC==1) %>% select(ID,DC,AGEFIN)
+
+longdc = union(longdc1,longdc0)
+longdc = rename(longdc, AGEDC = AGEFIN)
+```
+
+-   Démence
+
+```{r}
+#Ici personnes sans démence dernier agedem comme âge de démence
+longdem0 = data3C %>% group_by(ID) %>% arrange(desc(AGEDEM))  %>% filter(row_number()==1) %>% filter(DEM0==0) %>% select(ID,DEM0,AGEDEM)
+
+#Ici personnes démentes donc âge de démence
+longdem1=data3C %>% group_by(ID) %>% filter(DEM0==1) %>% filter(row_number()==1)  %>% select(ID,DEM0,AGEDEM)
+
+longdem=union(longdem1,longdem0)
+```
+
+Maintenant on **fusionne** les trois tables sur ID.
+
+```{r}
+datatransvers=data2 %>% left_join(longdem,by="ID") %>% left_join(longdc,by="ID") %>% left_join(longage,by="ID")
+```
+
+Retrait des lignes où les personnes sont démentes ou ont des antécédents cardiovasculaires au suivi 0. *#flow chart*
+
+ici distinguer si na ou si présent et faire un deuxième flow chart avec dem0==1 au suivi 0 1 et 2 on enlève 1 infractus 2 angine
+
+```{r}
+excluSuivi=(datatransvers %>% select(ID)) %>% intersect((excluSuivi %>% select(ID)))
+
+excludedDEM=subset(datatransvers, abs(AGE0-AGEDEM)<0.0005)
+
+excludedcardio=subset(datatransvers, avccorr0==1 | malcorot==1|malcorot==2)
+
+datatransvers <- subset(datatransvers, abs(AGE0-AGEDEM)>0.0005) 
+
+datatransvers <- subset(datatransvers,avccorr0==0 & malcorot==0)
+```
+
+Base finale ---\> *datatransvers*
+
+**Flow chart**
+
+```{r}
+library(Gmisc)
+library(magrittr)
+library(glue)
+ 
+# The key boxes that we want to plot
+Pop <- boxGrob(glue("Population globale",
+            "n = {pop}",
+            pop = txtInt(length(datatrans$ID)),
+            .sep = "\n"))
+databox1 <- boxGrob(glue("Echantillon avec\nun score cardiovasculaire",
+            "n = {pop}",
+            pop = txtInt(length(data1$ID)),
+            .sep = "\n"))
+databox2 <- boxGrob(glue("Echantillon avec les\nvariables d'ajustement",
+            "n = {pop}",
+            pop = txtInt(length(data2$ID)),
+            .sep = "\n"))
+databox3 <- boxGrob(glue("Base finale",
+            "n = {pop}",
+            pop = txtInt(length(data3$ID)),
+            .sep = "\n"))
+excluded1 <- boxGrob(glue("Scores\ncardiovasculaires\n manquants (n = {tot})",
+          tot=txtInt(length(datatrans$ID)-length(data1$ID)),
+            .sep = "\n",
+            just = "left"))
+excluded2 <- boxGrob(glue("Variables d'ajustement\nmanquantes (n = {tot}) :",
+            "- Niveau d'étude (n={DIPNIV})",
+            "- APOE4 (n={APOE4})",
+            "- Antécédents cardiovasculaires (n={ant})",
+            DIPNIV = sum(is.na(data1$DIPNIVt)),
+            APOE4 = sum(is.na(data1$APOE4)),
+            ant = length(data1$ID)-length(data2$ID)-DIPNIV-APOE4,
+            tot=txtInt(length(data1$ID)-length(data2$ID)),
+            .sep = "\n",
+            just = "left"))
+excluded3 <- boxGrob(glue("Au suivi 0, personnes :",
+            "- démentes (n={DEM})",
+            "- présentant des antécédents\ncardiovasculaires (n={avc_mal})",
+            DEM = length(excludedDEM$ID),
+            avc_mal = length(data2$ID)-length(datatransvers$ID)-length(excludedDEM$ID),
+            .sep = "\n",
+            just = "left"))
+ 
+# Move boxes to where we want them
+vert <- spreadVertical(Pop=Pop,
+                       databox1 = databox1,
+                       databox2 = databox2,
+                       databox3 = databox3)
+ 
+y1 <- coords(vert$databox1)$top +
+  distance(vert$Pop, vert$databox1, half = TRUE, center = FALSE)
+y2 <- coords(vert$databox2)$top +
+  distance(vert$databox1, vert$databox2, half = TRUE, center = FALSE)
+y3 <- coords(vert$databox3)$top +
+  distance(vert$databox2, vert$databox3, half = TRUE, center = FALSE)
+
+excluded1 <- moveBox(excluded1,
+                    x = .8,
+                    y = y1)
+excluded2 <- moveBox(excluded2,
+                    x = .8,
+                    y = y2)
+excluded3 <- moveBox(excluded3,
+                    x = .8,
+                    y = y3)
+
+# Connect vertical arrows, skip last box
+for (i in 1:(length(vert) - 1)) {
+  connectGrob(vert[[i]], vert[[i + 1]], type = "vert") %>%
+    print
+}
+ 
+# Add a connection to the exclusions
+connectGrob(vert$databox1, excluded2, type = "L")
+connectGrob(vert$Pop, excluded1, type = "L")
+connectGrob(vert$databox2, excluded3, type = "L")
+
+# Print boxes
+vert
+excluded1
+excluded2
+excluded3
+```
+
+Calcul des Low et Upper pour les 4 cas différents
+
+On prend data3C mais qu'avec les patients inclus
+
+```{r}
+df=semi_join(data3C,datatransvers, by = "ID")
+```
+
+Déments
+
+```{r}
+#Âge bas
+low = df %>% group_by(ID) %>% arrange(desc(AGE)) %>% filter(DEM0==0) %>% filter(row_number()==1) %>% select(AGE,ID) %>% rename(AGEDEMlow=AGE)
+
+#Âge haut
+upper=df %>% group_by(ID)%>% arrange(AGE) %>% filter(DEM0==1) %>% filter(row_number()==1) %>%select(AGE,ID) %>% rename(AGEDEMup=AGE)
+
+D=inner_join(low,upper,by="ID")
+```
+
+non Déments
+
+```{r}
+#Âge bas=Âge haut
+low = datatransvers %>% filter(DEM0==0) %>% select(ID,AGEDEM) %>% rename(AGEDEMlow=AGEDEM)
+
+#Âge haut
+upper = datatransvers %>% filter(DEM0==0) %>% select(ID,AGEDEM) %>% rename(AGEDEMup=AGEDEM)
+
+nD=inner_join(low,upper,by="ID")
+```
+
+```{r}
+df=union(D,nD)
+datatransvers= datatransvers %>% left_join(df,by="ID")
+describe(datatransvers)
+```
+
+```{r}
+describe(datatransvers$AGEDELow)
+describe(datatransvers$AGEDEMup-datatransvers$AGEDEMlow)
+```
+
+on peut voir que certaines personnes ont DEM0==0 au suivi 0 alors que AGEDEM==AGE0
+
+```{r}
+df=data3C %>% group_by(ID) %>% semi_join(excludedDEM,by="ID")
+table(df$DEM0)/8
+```
+
+ça concerne 46 personnes
+
+Au total il y a 59 personnes qui sont démentes à l'entrée de l'étude.
+
+## Méthodes de survie
+
+Calcul des délais
+
+```{r}
+datatransvers$DELAIDEM=datatransvers$AGEDEM-datatransvers$AGE0
+datatransvers$DELAIDC=datatransvers$AGEDC-datatransvers$AGE0
+```
+
+Ecriture de la base 
+
+```{r}
+write.table(datatransvers,file="datatransvers.txt", fileEncoding = "UTF-8")
+```
